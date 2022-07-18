@@ -14,10 +14,12 @@ load("//third_party/toolchains/embedded/arm-linux:arm_linux_toolchain_configure.
 load("//third_party:repo.bzl", "tf_http_archive")
 load("//third_party/clang_toolchain:cc_configure_clang.bzl", "cc_download_clang_toolchain")
 load("//tensorflow/tools/def_file_filter:def_file_filter_configure.bzl", "def_file_filter_configure")
+load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
 
 # Import third party repository rules. See go/tfbr-thirdparty.
 load("//third_party/FP16:workspace.bzl", FP16 = "repo")
 load("//third_party/absl:workspace.bzl", absl = "repo")
+load("//third_party/rocksdb:workspace.bzl", rocksdb = "repo")
 load("//third_party/aws:workspace.bzl", aws = "repo")
 load("//third_party/clog:workspace.bzl", clog = "repo")
 load("//third_party/cpuinfo:workspace.bzl", cpuinfo = "repo")
@@ -74,6 +76,7 @@ def _initialize_third_party():
     ruy()
     sobol_data()
     vulkan_headers()
+    rocksdb()
 
 # Toolchains & platforms required by Tensorflow to build.
 def _tf_toolchains():
@@ -1098,6 +1101,19 @@ def _tf_repositories():
             "https://github.com/apple/coremltools/archive/3.3.zip",
         ],
     )
+
+    http_archive(
+        name = "rules_foreign_cc",
+        strip_prefix = "rules_foreign_cc-0dafcb29a8ce9c3b49a211ebba6c9c0f79eb93d6",
+        url = "https://github.com/bazelbuild/rules_foreign_cc/archive/0dafcb29a8ce9c3b49a211ebba6c9c0f79eb93d6.tar.gz",
+    )
+
+    http_archive(
+        name = "hedron_compile_commands",
+        url = "https://github.com/hedronvision/bazel-compile-commands-extractor/archive/ac78f5f1e2679b9f5b62eeae33055ede355672e6.tar.gz",
+        strip_prefix = "bazel-compile-commands-extractor-ac78f5f1e2679b9f5b62eeae33055ede355672e6",
+    )
+
 
 def workspace():
     # Check the bazel version before executing any repository rules, in case

@@ -1477,6 +1477,45 @@ tf_kernel_library(
     ],
 )
 
+tf_kernel_library(
+    name = "rocksdb_common",
+    hdrs = ["common.h", "tensor_utils.h"],
+)
+
+tf_kernel_library(
+    name = "aliccp_rocksdb_op",
+    srcs = ["aliccp_rocksdb_op.cpp"],
+    deps = [
+        ":name_utils",
+        "//tensorflow/core:core_cpu_internal",
+        "//tensorflow/core:dataset_ops_op_lib",
+        "//tensorflow/core:framework",
+        "//tensorflow/core:lib",
+        "//tensorflow/core:lib_internal",
+		"//tensorflow/tools/dataset:feats_generated",
+        "@rocksdb//:rocksdb",
+        ":rocksdb_common",
+		"@com_google_absl//absl/strings"
+    ],
+)
+
+tf_kernel_library(
+    name = "rocksdb_dataset_op",
+    srcs = ["rocksdb_dataset_op.cpp"],
+    deps = [
+        ":name_utils",
+        "//tensorflow/core:core_cpu_internal",
+        "//tensorflow/core:dataset_ops_op_lib",
+        "//tensorflow/core:framework",
+        "//tensorflow/core:lib",
+        "//tensorflow/core:lib_internal",
+		"//tensorflow/tools/dataset:feats_generated",
+        "@rocksdb//:rocksdb",
+        ":rocksdb_common",
+		"@com_google_absl//absl/strings"
+    ],
+)
+
 tf_cc_test(
     name = "text_line_dataset_op_test",
     size = "small",
@@ -1689,6 +1728,8 @@ tf_kernel_library(
         ":tensor_dataset_op",
         ":tensor_slice_dataset_op",
         ":text_line_dataset_op",
+		":aliccp_rocksdb_op",
+		":rocksdb_dataset_op",
         ":tf_record_dataset_op",
         ":window_dataset_op",
         ":zip_dataset_op",

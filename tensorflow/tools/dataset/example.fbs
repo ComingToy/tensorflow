@@ -1,0 +1,12 @@
+include "feature.fbs";
+namespace dataset;
+table Example
+{
+  example_id: uint64;
+  y: uint8;
+  z: uint8;
+  comm_feat_id: string;
+  feat_num: uint32;
+  feats: [ Feature ];
+}
+root_type Example;

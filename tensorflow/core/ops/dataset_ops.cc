@@ -635,6 +635,18 @@ REGISTER_OP("TextLineDataset")
       return shape_inference::ScalarShape(c);
     });
 
+REGISTER_OP("RocksdbDataset")
+    .Input("example_db: string")
+    .Input("start: uint64")
+    .Output("handle: variant")
+    .SetDoNotOptimize()
+    .SetShapeFn([](shape_inference::InferenceContext* c) {
+        shape_inference::ShapeHandle unused;
+        TF_RETURN_IF_ERROR(c->WithRankAtMost(c->input(0), 0, &unused));
+        TF_RETURN_IF_ERROR(c->WithRankAtMost(c->input(1), 0, &unused));
+        return shape_inference::ScalarShape(c);
+    });
+
 REGISTER_OP("FixedLengthRecordDataset")
     .Input("filenames: string")
     .Input("header_bytes: int64")

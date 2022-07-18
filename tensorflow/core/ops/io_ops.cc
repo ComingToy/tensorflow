@@ -352,6 +352,38 @@ REGISTER_OP("IdentityReaderV2")
     .SetIsStateful()
     .SetShapeFn(shape_inference::ScalarShape);
 
+REGISTER_OP("RocksdbReader")
+    .Attr("db: string")
+    .Attr("start: int")
+    .Attr("container: string = ''")
+    .Output("reader_handle: resource")
+    .SetIsStateful()
+    .SetShapeFn(shape_inference::ScalarShape);
+
+REGISTER_OP("AliCCPRocksDB")
+    .Input("feat_serialized: string")
+    .Output("feat_field_id: int64")
+    .Output("feat_id: int64")
+    .Output("features: float32")
+    .Output("y: int64")
+    .Output("z: int64")
+    .Output("lens: int64")
+    .Attr("max_feats: int")
+    .SetShapeFn([](shape_inference::InferenceContext* context) {
+      auto example_ids = context->input(0);
+      auto batch = context->Dim(example_ids, 0);
+      int max_feats = 0;
+      TF_RETURN_IF_ERROR(context->GetAttr("max_feats", &max_feats));
+      auto shape = context->Matrix(batch, max_feats);
+      context->set_output(0, shape);
+      context->set_output(1, shape);
+      context->set_output(2, shape);
+      context->set_output(3, example_ids);
+      context->set_output(4, example_ids);
+      context->set_output(5, example_ids);
+      return Status::OK();
+    });
+
 // Ops that operate on Readers ------------------------------------------------
 
 REGISTER_OP("ReaderRead")

@@ -1,0 +1,9 @@
+include "feature.fbs";
+namespace dataset;
+table CommFeature
+{
+  comm_feat_id: string;
+  feat_num: uint32;
+  feats: [ Feature ];
+}
+root_type CommFeature;

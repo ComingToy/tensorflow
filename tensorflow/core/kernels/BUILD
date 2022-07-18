@@ -3023,6 +3023,7 @@ cc_library(
         ":save_op",
         ":save_restore_v2_ops",
         ":text_line_reader_op",
+        ":rocksdb_reader_op",
         ":tf_record_reader_op",
         ":whole_file_read_ops",
     ],
@@ -3102,6 +3103,17 @@ tf_kernel_library(
     name = "text_line_reader_op",
     prefix = "text_line_reader_op",
     deps = IO_DEPS,
+)
+
+tf_kernel_library(
+    name = "rocksdb_reader_op",
+    prefix = "rocksdb_reader_op",
+    deps = IO_DEPS + [
+		"@rocksdb//:rocksdb",
+		"@com_google_absl//absl/strings",
+		"//tensorflow/core/kernels/data:rocksdb_common",
+		"//tensorflow/core/kernels/data:name_utils",
+	]
 )
 
 tf_kernel_library(
@@ -6484,6 +6496,7 @@ filegroup(
             "sdca_internal.*",
             "sparse_cross_op.*",
             "text_line_reader_op.*",
+            "rocksdb_reader_op.*",
             "summary_image_op.*",
             "identity_reader_op.*",
             "fixed_length_record_reader_op.*",

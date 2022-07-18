@@ -6,6 +6,8 @@ load("@bazel_toolchains//repositories:repositories.bzl", bazel_toolchains_reposi
 load("@build_bazel_rules_swift//swift:repositories.bzl", "swift_rules_dependencies")
 load("@com_github_grpc_grpc//bazel:grpc_extra_deps.bzl", "grpc_extra_deps")
 load("@local_config_android//:android.bzl", "android_workspace")
+load("@rules_foreign_cc//foreign_cc:repositories.bzl", "rules_foreign_cc_dependencies")
+load("@hedron_compile_commands//:workspace_setup.bzl", "hedron_compile_commands_setup")
 
 def _tf_bind():
     """Bind targets for some external repositories"""
@@ -107,6 +109,9 @@ def workspace():
     # Use `swift_rules_dependencies` to fetch the toolchains. With the
     # `git_repository` rules above, the following call will skip redefining them.
     swift_rules_dependencies()
+
+    rules_foreign_cc_dependencies()
+    hedron_compile_commands_setup()
 
     android_workspace()
 

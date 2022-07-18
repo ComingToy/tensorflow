@@ -138,6 +138,19 @@ class _TextLineDataset(dataset_ops.DatasetSource):
   def element_spec(self):
     return tensor_spec.TensorSpec([], dtypes.string)
 
+@tf_export("data.RocksDBDataset", v1=[])
+class RocksDBDatasetV2(dataset_ops.DatasetSource):
+    def __init__(self, db, start):
+        self._db = db
+        self._start = start
+
+        variant_tensor = gen_dataset_ops.rocksdb_dataset(self._db, self._start)
+        super(RocksDBDatasetV2, self).__init__(variant_tensor)
+
+    @property
+    def element_spec(self):
+        return tensor_spec.TensorSpec([], dtypes.uint64), tensor_spec.TensorSpec([], dtypes.string)
+
 
 @tf_export("data.TextLineDataset", v1=[])
 class TextLineDatasetV2(dataset_ops.DatasetSource):
@@ -242,6 +255,16 @@ class TextLineDatasetV1(dataset_ops.DatasetV1Adapter):
   @_filenames.setter
   def _filenames(self, value):
     self._dataset._filenames = value  # pylint: disable=protected-access
+
+@tf_export(v1=["data.RocksDBDataset"])
+class RocksDBDatasetV1(dataset_ops.DatasetV1Adapter):
+  """A `Dataset` comprising lines from one or more text files."""
+
+  def __init__(self, db, start):
+    wrapped = RocksDBDatasetV2(db, start)
+    super(RocksDBDatasetV1, self).__init__(wrapped)
+
+  __init__.__doc__ = RocksDBDatasetV2.__init__.__doc__
 
 
 class _TFRecordDataset(dataset_ops.DatasetSource):

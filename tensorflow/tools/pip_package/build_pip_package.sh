@@ -33,7 +33,7 @@ function cp_external() {
   cd "$src_dir"
   for f in `find . ! -type d ! -name '*.py' ! -path '*local_config_cuda*' ! -path '*local_config_tensorrt*' ! -path '*local_config_syslibs*' ! -path '*org_tensorflow*' ! -path '*llvm-project/llvm/*'`; do
     mkdir -p "${dest_dir}/$(dirname ${f})"
-    cp "${f}" "${dest_dir}/$(dirname ${f})/"
+    cp -r "${f}" "${dest_dir}/$(dirname ${f})/"
   done
   popd
 
