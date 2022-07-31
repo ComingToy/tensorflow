@@ -20,6 +20,8 @@ load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
 load("//third_party/FP16:workspace.bzl", FP16 = "repo")
 load("//third_party/absl:workspace.bzl", absl = "repo")
 load("//third_party/rocksdb:workspace.bzl", rocksdb = "repo")
+load("//third_party/zeromq:workspace.bzl", zeromq = "repo")
+load("//third_party/ps-lite:workspace.bzl", pslite = "repo")
 load("//third_party/aws:workspace.bzl", aws = "repo")
 load("//third_party/clog:workspace.bzl", clog = "repo")
 load("//third_party/cpuinfo:workspace.bzl", cpuinfo = "repo")
@@ -77,6 +79,8 @@ def _initialize_third_party():
     sobol_data()
     vulkan_headers()
     rocksdb()
+    zeromq()
+    pslite()
 
 # Toolchains & platforms required by Tensorflow to build.
 def _tf_toolchains():

@@ -193,6 +193,7 @@ py_library(
         ":tf_item",
         ":tf_optimizer",
         ":training",
+		":pslite_ops_gen",
         ":weights_broadcast_ops",
         ":while_v2",
         "//tensorflow/core:protos_all_py",
@@ -2808,6 +2809,10 @@ tf_gen_op_wrapper_private_py(
     visibility = [
         "//tensorflow/python/training:__pkg__",
     ],
+)
+
+tf_gen_op_wrapper_private_py(
+    name = "pslite_ops_gen",
 )
 
 tf_gen_op_wrapper_private_py(

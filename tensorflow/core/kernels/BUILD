@@ -7527,6 +7527,25 @@ tf_kernel_library(
     ],
 )
 
+cc_library(
+    name = "pslite_ops_lib",
+    srcs = ["pslite_ops.cc"],
+    hdrs = ["pslite_ops.h"],
+    copts = ["-fexceptions"],
+    deps = [
+	    "@ps-lite//:pslite"
+    ],
+)
+
+tf_kernel_library(
+    name = "pslite_ops",
+    srcs = ["pslite_push_pull_op.cc"],
+    deps = [
+        ":pslite_ops_lib",
+        ":dense_update_functor",
+    ],
+)
+
 tf_cc_test(
     name = "isotonic_regression_op_test",
     size = "small",
