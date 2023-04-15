@@ -2,7 +2,7 @@ load("@flatbuffers//:build_defs.bzl", "flatbuffer_cc_library")
 
 flatbuffer_cc_library(
     name = "feats_generated",
-    srcs = ["comm_feats.fbs", "example.fbs", "feature.fbs", "vocab.fbs"],
+    srcs = ["comm_feats.fbs", "example.fbs", "feature.fbs", "vocab.fbs", "embedding.fbs"],
     visibility = ["//visibility:public"],
 )
 

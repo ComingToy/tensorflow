@@ -652,6 +652,7 @@ cc_library(
         "//tensorflow/core/kernels:summary_kernels",
         "//tensorflow/core/kernels:training_ops",
         "//tensorflow/core/kernels:pslite_ops",
+        "//tensorflow/core/kernels:trainable_hash_table_ops",
         "//tensorflow/core/kernels:word2vec_kernels",
         "//tensorflow/core/kernels/linalg:linalg",
         "//tensorflow/core/kernels/image:image",
@@ -1002,6 +1003,7 @@ filegroup(
         "tpu_replication_ops_op_lib",
         "training_ops_op_lib",
         "pslite_ops_op_lib",
+        "trainable_hash_table_ops_op_lib",
         "word2vec_ops",
     ]
 ]

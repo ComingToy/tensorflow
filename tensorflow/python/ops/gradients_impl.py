@@ -21,6 +21,7 @@ from __future__ import print_function
 from tensorflow.python.framework import dtypes
 from tensorflow.python.framework import ops
 from tensorflow.python.ops import array_grad  # pylint: disable=unused-import
+from tensorflow.python.ops import ps_ops_grad # pylint: disable=unused-import
 from tensorflow.python.ops import array_ops
 from tensorflow.python.ops import check_ops  # pylint: disable=unused-import
 from tensorflow.python.ops import control_flow_grad  # pylint: disable=unused-import

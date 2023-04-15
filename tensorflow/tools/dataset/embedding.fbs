@@ -1,0 +1,14 @@
+namespace embedding;
+
+table KVEntry
+{
+    key: int64;
+    values: [ float32 ];
+}
+
+table Embedding
+{
+    entries: [ KVEntry ];
+}
+
+root_type Embedding;

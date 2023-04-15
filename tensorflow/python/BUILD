@@ -194,6 +194,8 @@ py_library(
         ":tf_optimizer",
         ":training",
 		":pslite_ops_gen",
+		":trainable_hash_table_ops_gen",
+        ":trainable_hash_table_ops",
         ":weights_broadcast_ops",
         ":while_v2",
         "//tensorflow/core:protos_all_py",
@@ -2816,6 +2818,10 @@ tf_gen_op_wrapper_private_py(
 )
 
 tf_gen_op_wrapper_private_py(
+    name = "trainable_hash_table_ops_gen",
+)
+
+tf_gen_op_wrapper_private_py(
     name = "ragged_array_ops_gen",
     visibility = ["//tensorflow/python/ops/ragged:__pkg__"],
 )
@@ -2882,6 +2888,17 @@ py_library(
         ":framework_for_generated_wrappers",
         ":math_ops",
         ":sparse_ops",
+        "//tensorflow/compiler/tf2xla/ops:gen_xla_ops",
+    ],
+)
+
+py_library(
+    name = "ps_ops_grad",
+    srcs = ["ops/ps_ops_grad.py"],
+    srcs_version = "PY3",
+    deps = [
+        ":framework",
+        ":framework_for_generated_wrappers",
         "//tensorflow/compiler/tf2xla/ops:gen_xla_ops",
     ],
 )
@@ -3826,6 +3843,17 @@ py_library(
 )
 
 py_library(
+    name = "trainable_hash_table_ops",
+    srcs = ["ops/trainable_hash_table_ops.py"],
+    srcs_version = "PY3",
+    deps = [
+        ":array_ops",
+        ":math_ops",
+        ":framework_ops",
+    ]
+)
+
+py_library(
     name = "critical_section_ops",
     srcs = ["ops/critical_section_ops.py"],
     srcs_version = "PY3",
@@ -4327,6 +4355,7 @@ py_library(
     deps = [
         ":array_grad",
         ":array_ops",
+        ":ps_ops_grad",
         ":batch_ops",
         ":check_ops",
         ":clip_ops",

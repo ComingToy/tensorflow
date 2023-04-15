@@ -96,7 +96,8 @@ tf_gen_op_libs(
         "stateless_random_ops_v2",
         "summary_ops",
         "training_ops",
-		"pslite_ops"
+		"pslite_ops",
+		"trainable_hash_table_ops"
     ],
     sub_directory = "",
     deps = [
@@ -297,6 +298,7 @@ cc_library(
         ":string_ops_op_lib",
         ":training_ops_op_lib",
 		":pslite_ops_op_lib",
+		":trainable_hash_table_ops_op_lib",
         ":word2vec_ops",
     ] + if_chromiumos(
         [],

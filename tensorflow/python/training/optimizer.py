@@ -35,6 +35,7 @@ from tensorflow.python.framework import ops
 from tensorflow.python.ops import array_ops
 from tensorflow.python.ops import control_flow_ops
 from tensorflow.python.ops import gradients
+from tensorflow.python.ops import trainable_hash_table_ops
 from tensorflow.python.ops import math_ops
 from tensorflow.python.ops import resource_variable_ops
 from tensorflow.python.ops import state_ops
@@ -201,6 +202,16 @@ class _TensorProcessor(_OptimizableVariable):
   def update_op(self, optimizer, g):
     raise NotImplementedError("Trying to update a Tensor ", self._v)
 
+class _PsTableProcessor(_OptimizableVariable):
+  def __init__(self, v):
+    self._v = v
+
+  def target(self):
+    return self._v.handle
+
+  def update_op(self, optimizer, g):
+    return optimizer._ps_table_apply_sparse_duplicate_indices(g.values, self._v.handle, g.indices)
+
 
 def _get_processor(v):
   """The processor of v."""
@@ -212,6 +223,8 @@ def _get_processor(v):
   if resource_variable_ops.is_resource_variable(v) and not v._in_graph_mode:  # pylint: disable=protected-access
     # True if and only if `v` was initialized eagerly.
     return _DenseResourceVariableProcessor(v)
+  if isinstance(v, trainable_hash_table_ops.TrainableHashTableVariable):
+    return _PsTableProcessor(v)
   if v.op.type == "VarHandleOp":
     return _DenseResourceVariableProcessor(v)
   if isinstance(v, variables.Variable):

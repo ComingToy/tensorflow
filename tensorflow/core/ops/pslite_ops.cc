@@ -28,4 +28,5 @@ REGISTER_OP("PsliteSyncGlobalStep")
       c->set_output(0, c->Scalar());
       return Status::OK();
     });
+
 }  // namespace tensorflow

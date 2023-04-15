@@ -7540,8 +7540,19 @@ cc_library(
 tf_kernel_library(
     name = "pslite_ops",
     srcs = ["pslite_push_pull_op.cc"],
+    hdrs = ["gather_functor.h"],
     deps = [
         ":pslite_ops_lib",
+        ":dense_update_functor",
+    ],
+)
+
+tf_kernel_library(
+    name = "trainable_hash_table_ops",
+    srcs = ["trainable_hash_table_ops.cc"],
+    hdrs = ["gather_functor.h"],
+    deps = [
+        "//tensorflow/tools/dataset:feats_generated",
         ":dense_update_functor",
     ],
 )
