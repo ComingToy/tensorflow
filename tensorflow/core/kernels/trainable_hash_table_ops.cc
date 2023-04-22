@@ -21,7 +21,8 @@ namespace tensorflow {
 
 class __LocalPsTableInterface : public ResourceBase {
  public:
-  virtual Status read(Tensor const& keys, Tensor& values) = 0;
+  virtual Status read(Tensor const& keys, Tensor& values,
+                      const bool create = true) = 0;
   virtual Status update(Tensor const& keys, Tensor const& values) = 0;
   virtual Status export_values(int64* counts) = 0;
   virtual Status import_values(int64* counts) = 0;
@@ -87,7 +88,7 @@ class __LocalMemPsTable : public __LocalPsTableInterface {
 
   std::string DebugString() const override { return "__LocalMemPsTable"; }
 
-  Status read(Tensor const& keys, Tensor& values) override {
+  Status read(Tensor const& keys, Tensor& values, bool const create) override {
     auto keys_rank = keys.dims();
     auto values_rank = values.dims();
     if (keys_rank != 1) {
@@ -118,6 +119,10 @@ class __LocalMemPsTable : public __LocalPsTableInterface {
       auto flat_values = values.shaped<float, 2>({values.dim_size(0), dims()});
 
       for (int i = 0; i < keys.NumElements(); ++i) {
+        if (table_.count(flat_keys(i)) == 0 && !create) {
+          return errors::NotFound("key not found: ", flat_keys(i));
+        }
+
         auto& vec = table_[flat_keys(i)];
         if (vec.empty()) {
           auto init_idx =
@@ -172,7 +177,7 @@ class __LocalMemPsTable : public __LocalPsTableInterface {
         // check exist
         auto pos = table_.find(flat_keys(i));
         if (pos == table_.end()) {
-          return errors::InvalidArgument("tryy to update key not in table: ",
+          return errors::InvalidArgument("try to update key not in table: ",
                                          flat_keys(i));
         }
         auto& vec = pos->second;
@@ -453,7 +458,7 @@ class ScatterEmbeddingLocalPsOp : public OpKernel {
     OP_REQUIRES_OK(ctx, ctx->allocate_output(0, values.shape(), &output));
     auto& old_values = *output;
 
-    OP_REQUIRES_OK(ctx, v->read(ids, old_values));
+    OP_REQUIRES_OK(ctx, v->read(ids, old_values, false));
 
     // do update
     int n = static_cast<int>(ids.NumElements());
