@@ -7552,8 +7552,9 @@ tf_kernel_library(
     srcs = ["trainable_hash_table_ops.cc"],
     hdrs = ["gather_functor.h"],
     deps = [
-        "//tensorflow/tools/dataset:feats_generated",
+		"//tensorflow/tools/dataset:feats_generated",
         ":dense_update_functor",
+        "@rocksdb//:rocksdb",
     ],
 )
 

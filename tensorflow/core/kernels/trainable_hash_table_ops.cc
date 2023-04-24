@@ -8,6 +8,9 @@
 #include <mutex>
 
 #include "Eigen/Dense"
+#include "rocksdb/db.h"
+#include "rocksdb/options.h"
+#include "rocksdb/table.h"
 #include "tensorflow/core/framework/logging.h"
 #include "tensorflow/core/framework/op.h"
 #include "tensorflow/core/framework/op_kernel.h"
@@ -195,7 +198,6 @@ class __LocalMemPsTable : public __LocalPsTableInterface {
   Status export_values(int64* counts) override {
     ::flatbuffers::FlatBufferBuilder builder;
     std::vector<::flatbuffers::Offset<::embedding::KVEntry>> kvs;
-
     {
       std::lock_guard<std::mutex> ml(mu_);
       for (const auto& it : table_) {
@@ -311,6 +313,204 @@ class __LocalMemPsTable : public __LocalPsTableInterface {
   mutable std::mutex mu_;
 };
 
+class __LocalRocksdbPsTable : public __LocalPsTableInterface {
+ public:
+  __LocalRocksdbPsTable(OpKernelContext* context, std::string const& container,
+                        std::string const& name, int const dims,
+                        Tensor const& init_values)
+      : __LocalPsTableInterface(container, name, dims), db_(nullptr) {
+    ::rocksdb::DB* db = nullptr;
+    ::rocksdb::Options opt;
+
+    opt.create_if_missing = true;
+    opt.max_open_files = 3000;
+    opt.write_buffer_size = 500 * 1024 * 1024;
+    opt.max_write_buffer_number = 3;
+    opt.target_file_size_base = 67108864;
+    opt.compression = rocksdb::kZlibCompression;
+
+    rocksdb::BlockBasedTableOptions table_opt;
+    table_opt.block_cache = rocksdb::NewLRUCache(1000 * (1024 * 1024));
+    opt.table_factory.reset(rocksdb::NewBlockBasedTableFactory(table_opt));
+
+    std::string path = container + "/" + name;
+    auto status = ::rocksdb::DB::Open(opt, path, &db);
+    OP_REQUIRES(context, status.ok(),
+                errors::Internal("failed at open rocksdb ", path, ": ",
+                                 status.ToString()));
+    db_.reset(db);
+
+    OP_REQUIRES(context, init_values.dims() == 2,
+                errors::InvalidArgument("rank of init_values must be 2"));
+
+    auto init_values_dim1 = init_values.dim_size(1);
+    OP_REQUIRES(
+        context, init_values_dim1 == dims,
+        errors::InvalidArgument("dim1 of init_values is not equal to ", dims));
+
+    init_values_ = init_values;
+  }
+
+  std::string DebugString() const override { return "__LocalRocksdbPsTable"; }
+
+  Status read(Tensor const& keys, Tensor& values, bool const create) override {
+    auto keys_rank = keys.dims();
+    auto values_rank = values.dims();
+    if (keys_rank != 1) {
+      return errors::InvalidArgument("keys rank must be 1. ", keys_rank,
+                                     " is invalid");
+    }
+
+    if (values_rank != 2) {
+      return errors::InvalidArgument("values rank must be 2. ", values_rank,
+                                     " is invalid");
+    }
+
+    if (keys.dim_size(0) != values.dim_size(0)) {
+      return errors::InvalidArgument(
+          "keys.dims_size(0) != values.dim_size(0), keys.dims_size(0) = ",
+          keys.dim_size(0), ", values.dim_size(0) = ", values.dim_size(0));
+    }
+
+    if (values.dim_size(1) != dims()) {
+      return errors::InvalidArgument(
+          "values.dim_size(1) != dims, values.dim_size(1) = ",
+          values.dim_size(1), ", dims = ", dims());
+    }
+
+    std::lock_guard<std::mutex> ml(mu_);
+    std::vector<::rocksdb::Slice> slices;
+    auto flat_keys = keys.flat<int64>();
+    for (int i = 0; i < keys.NumElements(); ++i) {
+      auto& k = flat_keys(i);
+      slices.emplace_back(to_slice(k));
+    }
+
+    std::vector<std::string> buf;
+    std::vector<std::string> write_values;
+
+    ::rocksdb::WriteBatch batch;
+
+    auto status = db_->MultiGet(read_opt_, slices, &buf);
+    auto flat_values = values.shaped<float, 2>({values.dim_size(0), dims()});
+    auto assign_op = [&flat_values, this](int i, Tensor const& from) {
+      auto flat_from = from.flat<float>();
+      for (int k = 0; k < dims(); ++k) {
+        flat_values(i, k) = flat_from(k);
+      }
+    };
+
+    for (int i = 0; i < status.size(); ++i) {
+      auto const& s = status[i];
+      if (s.ok()) {
+        TensorProto proto;
+        Tensor tmp;
+        proto.ParseFromString(buf[i]);
+        tmp.FromProto(proto);
+        assign_op(i, tmp);
+      } else if (s.IsNotFound()) {
+        if (create) {
+          auto init_idx =
+              random() % static_cast<unsigned long>(init_values_.dim_size(0));
+
+          auto init = init_values_.SubSlice(init_idx);
+          assign_op(i, init);
+
+          TensorProto proto;
+          init.AsProtoTensorContent(&proto);
+
+          write_values.push_back(proto.SerializeAsString());
+
+          batch.Put(slices[i], ::rocksdb::Slice(write_values.back().data(),
+                                                write_values.back().size()));
+          continue;
+        } else {
+          return errors::Internal(s.ToString());
+        }
+      } else {
+        return errors::Internal(s.ToString());
+      }
+    }
+
+    if (batch.Count() > 0) {
+      auto status = db_->Write(write_opt_, &batch);
+      if (!status.ok()) return errors::Internal(status.ToString());
+    }
+
+    return Status::OK();
+  }
+
+  Status update(Tensor const& keys, Tensor const& values) override {
+    auto keys_rank = keys.dims();
+    auto values_rank = values.dims();
+    if (keys_rank != 1) {
+      return errors::InvalidArgument("keys rank must be 1. ", keys_rank,
+                                     " is invalid");
+    }
+
+    if (values_rank != 2) {
+      return errors::InvalidArgument("values rank must be 2. ", values_rank,
+                                     " is invalid");
+    }
+
+    if (keys.dim_size(0) != values.dim_size(0)) {
+      return errors::InvalidArgument(
+          "keys.dims_size(0) != values.dim_size(0), keys.dims_size(0) = ",
+          keys.dim_size(0), ", values.dim_size(0) = ", values.dim_size(0));
+    }
+
+    if (values.dim_size(1) != dims()) {
+      return errors::InvalidArgument(
+          "values.dim_size(1) != dims, values.dim_size(1) = ",
+          values.dim_size(1), ", dims = ", dims());
+    }
+
+    std::lock_guard<std::mutex> ml(mu_);
+    auto flat_keys = keys.flat<int64>();
+    ::rocksdb::WriteBatch batch;
+
+    std::vector<::rocksdb::Slice> write_keys;
+    std::vector<std::string> write_values;
+    for (int i = 0; i < keys.NumElements(); ++i) {
+      auto const& v = flat_keys(i);
+      write_keys.push_back(to_slice(v));
+
+      TensorProto proto;
+      values.SubSlice(i).AsProtoTensorContent(&proto);
+      write_values.push_back(proto.SerializeAsString());
+      batch.Put(write_keys.back(), write_values.back());
+    }
+
+    auto ret = db_->Write(write_opt_, &batch);
+    if (!ret.ok()) {
+      return errors::Internal(ret.ToString());
+    }
+    return Status::OK();
+  }
+
+  Status import_values(int64* counts) override {
+    *counts = 0;
+    return Status::OK();
+  }
+
+  Status export_values(int64* counts) override {
+    *counts = 0;
+    return Status::OK();
+  }
+
+  template <typename T>
+  static ::rocksdb::Slice to_slice(T const& v) {
+    return ::rocksdb::Slice(reinterpret_cast<const char*>(&v), sizeof(v));
+  }
+
+ private:
+  std::unique_ptr<::rocksdb::DB> db_;
+  ::rocksdb::ReadOptions read_opt_;
+  ::rocksdb::WriteOptions write_opt_;
+  Tensor init_values_;
+  std::mutex mu_;
+};
+
 class LocalPsTableHandleOp : public OpKernel {
  public:
   LocalPsTableHandleOp(OpKernelConstruction* ctx) : OpKernel(ctx) {
@@ -347,8 +547,8 @@ class LocalPsTableHandleOp : public OpKernel {
         ctx, LookupOrCreateResource<__LocalPsTableInterface>(
                  ctx, resource_.scalar<ResourceHandle>()(), &v,
                  [this, &init_values, &ctx](__LocalPsTableInterface** ptr) {
-                   *ptr = new __LocalMemPsTable(ctx, container_, name_, dims_,
-                                                init_values);
+                   *ptr = new __LocalRocksdbPsTable(ctx, container_, name_,
+                                                    dims_, init_values);
 
                    LOG(INFO)
                        << "create LocalPsTableHandleOp instance, container = "
