@@ -8,9 +8,9 @@ from tensorflow.python.framework import dtypes
 
 
 class TrainableHashTableVariable(object):
-    def __init__(self, init_values, container, name, dims, trainable=True):
+    def __init__(self, init_values, container, name, dims, trainable=True, training=True):
         self._handle = gen_trainable_hash_table_ops.local_ps_table_handle_op(
-            init_values, container, name, name=name, dims=dims)
+            init_values, container, name, name=name, dims=dims, training=training)
         self._container = container
         self._name = name
         self._dims = dims

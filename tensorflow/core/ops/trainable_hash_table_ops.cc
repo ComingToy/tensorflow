@@ -8,6 +8,7 @@ REGISTER_OP("LocalPsTableHandleOp")
     .Attr("container: string")
     .Attr("table_name: string")
     .Attr("dims: int")
+	.Attr("training: bool = false")
     .SetIsStateful()
     .SetShapeFn([](shape_inference::InferenceContext* ctx) {
       int dims = 0;

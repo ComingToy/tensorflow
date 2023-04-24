@@ -317,9 +317,10 @@ class __LocalRocksdbPsTable : public __LocalPsTableInterface {
  public:
   __LocalRocksdbPsTable(OpKernelContext* context, std::string const& container,
                         std::string const& name, int const dims,
-                        Tensor const& init_values)
-      : __LocalPsTableInterface(container, name, dims), db_(nullptr) {
-
+                        Tensor const& init_values, bool read_only)
+      : __LocalPsTableInterface(container, name, dims),
+        db_(nullptr),
+        read_only_(read_only) {
     if (::access(container.c_str(), F_OK) != 0) {
       int ret = ::mkdir(container.c_str(), S_IWUSR | S_IRUSR | S_IXUSR);
       char buf[1024];
@@ -344,7 +345,12 @@ class __LocalRocksdbPsTable : public __LocalPsTableInterface {
     opt.table_factory.reset(rocksdb::NewBlockBasedTableFactory(table_opt));
 
     std::string path = container + "/" + name;
-    auto status = ::rocksdb::DB::Open(opt, path, &db);
+    ::rocksdb::Status status;
+    if (read_only_) {
+      status = ::rocksdb::DB::OpenForReadOnly(opt, path, &db);
+    } else {
+      status = ::rocksdb::DB::Open(opt, path, &db);
+    }
     OP_REQUIRES(context, status.ok(),
                 errors::Internal("failed at open rocksdb ", path, ": ",
                                  status.ToString()));
@@ -431,8 +437,10 @@ class __LocalRocksdbPsTable : public __LocalPsTableInterface {
 
           write_values.push_back(proto.SerializeAsString());
 
-          batch.Put(slices[i], ::rocksdb::Slice(write_values.back().data(),
-                                                write_values.back().size()));
+          if (!read_only_) {
+            batch.Put(slices[i], ::rocksdb::Slice(write_values.back().data(),
+                                                  write_values.back().size()));
+          }
           continue;
         } else {
           return errors::Internal(s.ToString());
@@ -451,6 +459,10 @@ class __LocalRocksdbPsTable : public __LocalPsTableInterface {
   }
 
   Status update(Tensor const& keys, Tensor const& values) override {
+    if (read_only_) {
+      return errors::InvalidArgument("cannot update in read only mode");
+    }
+
     auto keys_rank = keys.dims();
     auto values_rank = values.dims();
     if (keys_rank != 1) {
@@ -519,6 +531,7 @@ class __LocalRocksdbPsTable : public __LocalPsTableInterface {
   ::rocksdb::WriteOptions write_opt_;
   Tensor init_values_;
   std::mutex mu_;
+  const bool read_only_;
 };
 
 class LocalPsTableHandleOp : public OpKernel {
@@ -527,6 +540,10 @@ class LocalPsTableHandleOp : public OpKernel {
     OP_REQUIRES_OK(ctx, ctx->GetAttr("table_name", &name_));
     OP_REQUIRES_OK(ctx, ctx->GetAttr("container", &container_));
     OP_REQUIRES_OK(ctx, ctx->GetAttr("dims", &dims_));
+
+    bool training = false;
+    OP_REQUIRES_OK(ctx, ctx->GetAttr("training", &training));
+    read_only_ = !training;
 
     is_anonymous_ = name_ == ResourceHandle::ANONYMOUS_NAME;
     assert(!is_anonymous_);
@@ -557,8 +574,8 @@ class LocalPsTableHandleOp : public OpKernel {
         ctx, LookupOrCreateResource<__LocalPsTableInterface>(
                  ctx, resource_.scalar<ResourceHandle>()(), &v,
                  [this, &init_values, &ctx](__LocalPsTableInterface** ptr) {
-                   *ptr = new __LocalRocksdbPsTable(ctx, container_, name_,
-                                                    dims_, init_values);
+                   *ptr = new __LocalRocksdbPsTable(
+                       ctx, container_, name_, dims_, init_values, read_only_);
 
                    LOG(INFO)
                        << "create LocalPsTableHandleOp instance, container = "
@@ -572,6 +589,7 @@ class LocalPsTableHandleOp : public OpKernel {
  private:
   Tensor resource_;
   bool is_anonymous_;
+  bool read_only_;
   std::string name_;
   std::string container_;
   int dims_;
