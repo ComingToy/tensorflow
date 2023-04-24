@@ -319,6 +319,16 @@ class __LocalRocksdbPsTable : public __LocalPsTableInterface {
                         std::string const& name, int const dims,
                         Tensor const& init_values)
       : __LocalPsTableInterface(container, name, dims), db_(nullptr) {
+
+    if (::access(container.c_str(), F_OK) != 0) {
+      int ret = ::mkdir(container.c_str(), S_IWUSR | S_IRUSR | S_IXUSR);
+      char buf[1024];
+      OP_REQUIRES(context, ret == 0,
+                  errors::Internal("mkdir ", container, " failed: ",
+                                   strerror_r(errno, buf, sizeof(buf))));
+      LOG(INFO) << "create embedding checkpoint dir " << container;
+    }
+
     ::rocksdb::DB* db = nullptr;
     ::rocksdb::Options opt;
 
