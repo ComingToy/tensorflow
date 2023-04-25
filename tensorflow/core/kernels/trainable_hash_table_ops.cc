@@ -334,7 +334,7 @@ class __LocalRocksdbPsTable : public __LocalPsTableInterface {
     ::rocksdb::Options opt;
 
     opt.create_if_missing = true;
-    opt.max_open_files = 3000;
+    opt.max_open_files = -1;
     opt.write_buffer_size = 500 * 1024 * 1024;
     opt.max_write_buffer_number = 3;
     opt.target_file_size_base = 67108864;

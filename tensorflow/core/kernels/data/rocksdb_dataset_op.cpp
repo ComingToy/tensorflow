@@ -164,6 +164,8 @@ class RocksdbDatasetOp::Dataset : public DatasetBase {
                         IteratorStateWriter* writer) override {
       TF_RETURN_IF_ERROR(
           writer->WriteScalar(full_name(kCurrentExampleKey), cur_key_));
+      LOG(INFO) << "save current_example_key to checkpoint, "
+                   "current_example_key = ";
       return Status::OK();
     }
 
@@ -173,6 +175,9 @@ class RocksdbDatasetOp::Dataset : public DatasetBase {
       TF_RETURN_IF_ERROR(
           reader->ReadScalar(full_name(kCurrentExampleKey), &key));
       cur_key_ = key.c_str();
+      LOG(INFO) << "restore current_example_key from checkpoint, "
+                   "current_example_key = "
+                << cur_key_;
       return Status::OK();
     }
 
