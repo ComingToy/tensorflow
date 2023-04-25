@@ -556,6 +556,7 @@ class LocalPsTableHandleOp : public OpKernel {
     OP_REQUIRES_OK(ctx, ctx->GetAttr("table_name", &name_));
     OP_REQUIRES_OK(ctx, ctx->GetAttr("container", &container_));
     OP_REQUIRES_OK(ctx, ctx->GetAttr("dims", &dims_));
+    OP_REQUIRES_OK(ctx, ctx->GetAttr("engine", &engine_));
 
     bool training = false;
     OP_REQUIRES_OK(ctx, ctx->GetAttr("training", &training));
@@ -587,18 +588,24 @@ class LocalPsTableHandleOp : public OpKernel {
 
     core::RefCountPtr<__LocalPsTableInterface> v;
     OP_REQUIRES_OK(
-        ctx, LookupOrCreateResource<__LocalPsTableInterface>(
-                 ctx, resource_.scalar<ResourceHandle>()(), &v,
-                 [this, &init_values, &ctx](__LocalPsTableInterface** ptr) {
-                   *ptr = new __LocalRocksdbPsTable(
-                       ctx, container_, name_, dims_, init_values, read_only_);
+        ctx,
+        LookupOrCreateResource<__LocalPsTableInterface>(
+            ctx, resource_.scalar<ResourceHandle>()(), &v,
+            [this, &init_values, &ctx](__LocalPsTableInterface** ptr) {
+              if (engine_ == "rocksdb") {
+                *ptr = new __LocalRocksdbPsTable(ctx, container_, name_, dims_,
+                                                 init_values, read_only_);
+              } else {
+                *ptr = new __LocalMemPsTable(ctx, container_, name_, dims_,
+                                             init_values);
+              }
 
-                   LOG(INFO)
-                       << "create LocalPsTableHandleOp instance, container = "
-                       << container_ << ", name = " << name_
-                       << ", dims = " << (*ptr)->dims();
-                   return Status::OK();
-                 }));
+              LOG(INFO) << "create LocalPsTableHandleOp instance, container = "
+                        << container_ << ", name = " << name_
+                        << ", dims = " << (*ptr)->dims()
+                        << ", engine = " << engine_;
+              return Status::OK();
+            }));
     ctx->set_output(0, resource_);
   }
 
@@ -609,6 +616,7 @@ class LocalPsTableHandleOp : public OpKernel {
   std::string name_;
   std::string container_;
   int dims_;
+  std::string engine_;
 };
 
 class LocalPsTableExportOp : public OpKernel {

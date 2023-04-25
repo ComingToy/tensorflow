@@ -8,9 +8,9 @@ from tensorflow.python.framework import dtypes
 
 
 class TrainableHashTableVariable(object):
-    def __init__(self, init_values, container, name, dims, trainable=True, training=True):
+    def __init__(self, init_values, container, name, dims, engine='mem', trainable=True, training=True):
         self._handle = gen_trainable_hash_table_ops.local_ps_table_handle_op(
-            init_values, container, name, name=name, dims=dims, training=training)
+            init_values, container, name, name=name, dims=dims, engine=engine, training=training)
         self._container = container
         self._name = name
         self._dims = dims
@@ -90,7 +90,8 @@ def embedding_lookup(params, ids, name=None):
             flat_keys = array_ops.reshape(ids, (-1, ))
             embedding = gen_trainable_hash_table_ops.lookup_embedding_local_ps_op(
                 params.handle, flat_keys)
-            indices = math_ops.range(array_ops.size(flat_keys), dtype=dtypes.int64)
+            indices = math_ops.range(
+                array_ops.size(flat_keys), dtype=dtypes.int64)
             indices = array_ops.reshape(indices, array_ops.shape(ids))
             embedding = array_ops.gather(embedding, indices)
             return embedding
