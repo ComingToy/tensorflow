@@ -313,6 +313,15 @@ class __LocalMemPsTable : public __LocalPsTableInterface {
   mutable std::mutex mu_;
 };
 
+static int64 get_env(std::string const& key, int64 const default_val) {
+  const auto* value = ::getenv(key.c_str());
+  if (!value) {
+    return default_val;
+  }
+
+  return std::strtoll(value, NULL, 0);
+}
+
 class __LocalRocksdbPsTable : public __LocalPsTableInterface {
  public:
   __LocalRocksdbPsTable(OpKernelContext* context, std::string const& container,
@@ -333,15 +342,22 @@ class __LocalRocksdbPsTable : public __LocalPsTableInterface {
     ::rocksdb::DB* db = nullptr;
     ::rocksdb::Options opt;
 
+    constexpr int64 default_write_buffer_size = 100 * 1024 * 1024;
+    constexpr int64 default_max_write_buffer_number = 5;
+    constexpr int64 default_block_cache = 500 * 1024 * 1024;
+
     opt.create_if_missing = true;
     opt.max_open_files = -1;
-    opt.write_buffer_size = 500 * 1024 * 1024;
-    opt.max_write_buffer_number = 3;
-    opt.target_file_size_base = 67108864;
+    opt.write_buffer_size =
+        get_env("TF_ROCKSDB_WRITE_BUFFER_SIZE", default_write_buffer_size);
+    opt.max_write_buffer_number = get_env("TF_ROCKSDB_MAX_WRITE_BUFFER_NUMBER",
+                                          default_max_write_buffer_number);
     opt.compression = rocksdb::kZlibCompression;
 
     rocksdb::BlockBasedTableOptions table_opt;
-    table_opt.block_cache = rocksdb::NewLRUCache(1000 * (1024 * 1024));
+    table_opt.block_cache = rocksdb::NewLRUCache(
+        get_env("TF_ROCKSDB_BLOCK_CACHE", default_block_cache));
+
     opt.table_factory.reset(rocksdb::NewBlockBasedTableFactory(table_opt));
 
     std::string path = container + "/" + name;
