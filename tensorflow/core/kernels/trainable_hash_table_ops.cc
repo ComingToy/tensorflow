@@ -21,6 +21,36 @@
 #include "tensorflow/tools/dataset/embedding_generated.h"
 
 namespace tensorflow {
+static Status _mkdir(const char* dir) {
+  char tmp[256];
+  char* p = NULL;
+  size_t len;
+  int ret = 0;
+
+  snprintf(tmp, sizeof(tmp), "%s", dir);
+  len = strlen(tmp);
+  if (tmp[len - 1] == '/') tmp[len - 1] = 0;
+  for (p = tmp + 1; *p; p++)
+    if (*p == '/') {
+      *p = 0;
+      ret = ::mkdir(tmp, S_IWUSR | S_IRUSR | S_IXUSR);
+      if (ret != 0 && errno != EEXIST) {
+        char buf[1024];
+        return errors::Internal(
+            "mkdir ", dir, " failed: ", strerror_r(errno, buf, sizeof(buf)));
+      }
+      *p = '/';
+    }
+
+  ret = ::mkdir(tmp, S_IWUSR | S_IRUSR | S_IXUSR);
+  if (ret != 0 && errno != EEXIST) {
+    char buf[1024];
+    return errors::Internal("mkdir ", dir,
+                            " failed: ", strerror_r(errno, buf, sizeof(buf)));
+  }
+
+  return Status::OK();
+}
 
 class __LocalPsTableInterface : public ResourceBase {
  public:
@@ -32,15 +62,19 @@ class __LocalPsTableInterface : public ResourceBase {
 
   std::string const& container() const { return container_; }
   std::string const& name() const { return name_; }
+  std::string const& checkpoint() const { return checkpoint_; }
   int dims() const { return dims_; }
 
   __LocalPsTableInterface(std::string const& container, std::string const& name,
                           int const dims)
-      : container_(container), name_(name), dims_(dims) {}
+      : container_(container), name_(name), dims_(dims) {
+    checkpoint_ = container.empty() ? name : container + "/" + name;
+  }
 
  private:
   const std::string container_;
   const std::string name_;
+  std::string checkpoint_;
   const int dims_;
 };
 
@@ -66,23 +100,9 @@ class __LocalMemPsTable : public __LocalPsTableInterface {
       }
     }
 
-    if (::access(container.c_str(), F_OK) != 0) {
-      int ret = ::mkdir(container.c_str(), S_IWUSR | S_IRUSR | S_IXUSR);
-      char buf[1024];
-      OP_REQUIRES(context, ret == 0,
-                  errors::Internal("mkdir ", container, " failed: ",
-                                   strerror_r(errno, buf, sizeof(buf))));
-      LOG(INFO) << "create embedding checkpoint dir " << container;
-    }
-
-    auto checkpoint_path = container + "/" + name;
-    if (::access(checkpoint_path.c_str(), F_OK) != 0) {
-      int ret = ::mkdir(checkpoint_path.c_str(), S_IWUSR | S_IRUSR | S_IXUSR);
-      char buf[1024];
-      OP_REQUIRES(context, ret == 0,
-                  errors::Internal("mkdir ", checkpoint_path, " failed: ",
-                                   strerror_r(errno, buf, sizeof(buf))));
-      LOG(INFO) << "create embedding checkpoint dir " << checkpoint_path;
+    if (::access(checkpoint().c_str(), F_OK) != 0) {
+      OP_REQUIRES_OK(context, _mkdir(checkpoint().c_str()));
+      LOG(INFO) << "create embedding checkpoint dir " << checkpoint();
     }
 
     // int64 counts = 0;
@@ -210,8 +230,8 @@ class __LocalMemPsTable : public __LocalPsTableInterface {
       auto embs = ::embedding::CreateEmbeddingDirect(builder, &kvs);
       builder.Finish(embs);
 
-      auto checkpoint_file = container() + "/" + name() + "/values.bin";
-      auto checkpoint_file_tmp = container() + "/" + name() + "/values.bin.tmp";
+      auto checkpoint_file = checkpoint() + "/values.bin";
+      auto checkpoint_file_tmp = checkpoint() + "/values.bin.tmp";
       auto fout = ::fopen(checkpoint_file_tmp.c_str(), "wb+");
       if (!fout) {
         char buf[1024];
@@ -266,7 +286,7 @@ class __LocalMemPsTable : public __LocalPsTableInterface {
   }
 
   Status import_values(int64* counts) override {
-    auto checkpoint_file = container() + "/" + name() + "/values.bin";
+    auto checkpoint_file = checkpoint() + "/values.bin";
     if (::access(checkpoint_file.c_str(), F_OK) != 0) {
       LOG(INFO) << checkpoint_file
                 << " is not exists. continue with init values";
@@ -330,13 +350,9 @@ class __LocalRocksdbPsTable : public __LocalPsTableInterface {
       : __LocalPsTableInterface(container, name, dims),
         db_(nullptr),
         read_only_(read_only) {
-    if (::access(container.c_str(), F_OK) != 0) {
-      int ret = ::mkdir(container.c_str(), S_IWUSR | S_IRUSR | S_IXUSR);
-      char buf[1024];
-      OP_REQUIRES(context, ret == 0,
-                  errors::Internal("mkdir ", container, " failed: ",
-                                   strerror_r(errno, buf, sizeof(buf))));
-      LOG(INFO) << "create embedding checkpoint dir " << container;
+    if (::access(checkpoint().c_str(), F_OK) != 0) {
+      OP_REQUIRES_OK(context, _mkdir(checkpoint().c_str()));
+      LOG(INFO) << "create embedding checkpoint dir " << checkpoint();
     }
 
     ::rocksdb::DB* db = nullptr;
@@ -360,15 +376,14 @@ class __LocalRocksdbPsTable : public __LocalPsTableInterface {
 
     opt.table_factory.reset(rocksdb::NewBlockBasedTableFactory(table_opt));
 
-    std::string path = container + "/" + name;
     ::rocksdb::Status status;
     if (read_only_) {
-      status = ::rocksdb::DB::OpenForReadOnly(opt, path, &db);
+      status = ::rocksdb::DB::OpenForReadOnly(opt, checkpoint(), &db);
     } else {
-      status = ::rocksdb::DB::Open(opt, path, &db);
+      status = ::rocksdb::DB::Open(opt, checkpoint(), &db);
     }
     OP_REQUIRES(context, status.ok(),
-                errors::Internal("failed at open rocksdb ", path, ": ",
+                errors::Internal("failed at open rocksdb ", checkpoint(), ": ",
                                  status.ToString()));
     db_.reset(db);
 

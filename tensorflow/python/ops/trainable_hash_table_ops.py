@@ -8,14 +8,19 @@ from tensorflow.python.framework import dtypes
 
 
 class TrainableHashTableVariable(object):
-    def __init__(self, init_values, container, name, dims, engine='mem', trainable=True, training=True):
-        self._handle = gen_trainable_hash_table_ops.local_ps_table_handle_op(
-            init_values, container, name, name=name, dims=dims, engine=engine, training=training)
-        self._container = container
-        self._name = name
-        self._dims = dims
+    def __init__(self, init_values, name, dims, engine='mem', trainable=True, training=True):
+
+        self._container = ops.get_default_graph()._container
         self._trainable = trainable
         self._dtype = dtypes.as_dtype('float32')
+        self._engine = engine
+        self._init_values = init_values
+
+        with ops.name_scope(name) as name:
+            shared_name = ops.name_from_scope_name(name)
+            self._handle = gen_trainable_hash_table_ops.local_ps_table_handle_op(
+                init_values, container=self.container, table_name=shared_name, name=name, dims=dims, engine=engine, training=training)
+
         self._shape = self._handle.shape
 
         if trainable:
@@ -37,7 +42,7 @@ class TrainableHashTableVariable(object):
 
     @property
     def name(self):
-        return self._name
+        return self.handle.name
 
     @property
     def op(self):
@@ -47,6 +52,26 @@ class TrainableHashTableVariable(object):
     def device(self):
         return self._handle.device
 
+    @property
+    def container(self):
+        return self._container
+
+    @property
+    def dims(self):
+        return self._dims
+
+    @property
+    def engine(self):
+        return self._engine
+
+    @property
+    def graph(self):
+        return self.op.graph
+
+    @property
+    def init_values(self):
+        return self._init_values
+
     def get_shape(self):
         return self._shape
 
@@ -54,7 +79,7 @@ class TrainableHashTableVariable(object):
         return gen_trainable_hash_table_ops.local_ps_table_export_op(self.handle, name=name)
 
     def __repr__(self):
-        return "<tf.TrainableHashTableVariable 'container=%s name=%s' shape=%s dtype=%s>" % (self._container, self.name, self.get_shape(), self.dtype.name)
+        return "<tf.TrainableHashTableVariable 'name=%s' shape=%s dtype=%s>" % (self.name, self.get_shape(), self.dtype.name)
 
     class _Saveable(BaseSaverBuilder.SaveableObject):
         def __init__(self, table, name):
