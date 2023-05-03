@@ -207,10 +207,10 @@ class _PsTableProcessor(_OptimizableVariable):
     self._v = v
 
   def target(self):
-    return self._v.handle
+    return self._v
 
   def update_op(self, optimizer, g):
-    return optimizer._ps_table_apply_sparse_duplicate_indices(g.values, self._v.handle, g.indices)
+    return optimizer._ps_table_apply_sparse_duplicate_indices(g.values, self._v, g.indices)
 
 
 def _get_processor(v):

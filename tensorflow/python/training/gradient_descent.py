@@ -69,8 +69,8 @@ class GradientDescentOptimizer(optimizer.Optimizer):
     return resource_variable_ops.resource_scatter_add(
         handle.handle, indices, -grad * self._learning_rate)
 
-  def _ps_table_apply_sparse_duplicate_indices(self, grad, handle, indices):
-    return gen_trainable_hash_table_ops.scatter_add_embedding_local_ps_op(handle, indices, -grad*self._learning_rate)
+  def _ps_table_apply_sparse_duplicate_indices(self, grad, var, indices):
+    return gen_trainable_hash_table_ops.scatter_add_embedding_local_ps_op(var.handle, indices, -grad*self._learning_rate)
 
   def _apply_sparse_duplicate_indices(self, grad, var):
     delta = ops.IndexedSlices(

@@ -46,6 +46,9 @@ from tensorflow.python.ops import init_ops
 from tensorflow.python.ops import resource_variable_ops
 from tensorflow.python.ops import variable_scope
 from tensorflow.python.ops import variables
+from tensorflow.python.ops import trainable_hash_table_ops
+from tensorflow.python.ops import gen_trainable_hash_table_ops
+from tensorflow.python.framework import ops
 
 
 def _create_slot_var(primary,
@@ -71,14 +74,20 @@ def _create_slot_var(primary,
     use_resource = False
   else:
     use_resource = None
-  slot = variable_scope.get_variable(
-      scope,
-      initializer=val,
-      trainable=False,
-      use_resource=use_resource,
-      shape=shape,
-      dtype=dtype,
-      validate_shape=validate_shape)
+  if isinstance(primary, trainable_hash_table_ops.TrainableHashTableVariable):
+    scope_name = variable_scope.get_variable_scope().name
+    full_name = scope_name + '/' + scope if scope_name else scope
+    with ops.name_scope(None, skip_on_eager=False):
+        slot = trainable_hash_table_ops.TrainableHashTableVariable(val, name=full_name, dims=primary.dims, engine=primary.engine, trainable=False, training=True)
+  else:
+    slot = variable_scope.get_variable(
+        scope,
+        initializer=val,
+        trainable=False,
+        use_resource=use_resource,
+        shape=shape,
+        dtype=dtype,
+        validate_shape=validate_shape)
   variable_scope.get_variable_scope().set_partitioner(current_partitioner)
 
   # pylint: disable=protected-access
@@ -263,9 +272,15 @@ def create_zeros_slot(primary,
   else:
     if isinstance(primary, variables.Variable):
       slot_shape = array_ops.shape(primary.initialized_value())
+      val = array_ops.zeros(slot_shape, dtype=dtype)
+    elif isinstance(primary, trainable_hash_table_ops.TrainableHashTableVariable):
+      slot_init_shape = array_ops.shape(primary.init_values)
+      slot_init_shape = slot_init_shape[1:]
+      slot_init_val = array_ops.zeros(slot_init_shape, dtype=dtype)
+      val = array_ops.expand_dims(slot_init_val, 0)
     else:
       slot_shape = array_ops.shape(primary)
-    val = array_ops.zeros(slot_shape, dtype=dtype)
+      val = array_ops.zeros(slot_shape, dtype=dtype)
     return create_slot(
         primary,
         val,

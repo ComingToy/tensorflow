@@ -1,10 +1,12 @@
 from tensorflow.python.ops import gen_trainable_hash_table_ops
+from tensorflow.python.ops import variable_scope
 from tensorflow.python.ops import array_ops
 from tensorflow.python.ops import math_ops
 from tensorflow.python.framework import ops
 from tensorflow.python.training.saver import BaseSaverBuilder
 from tensorflow.python.framework import sparse_tensor
 from tensorflow.python.framework import dtypes
+from tensorflow.python.framework import tensor_conversion_registry
 
 
 class TrainableHashTableVariable(object):
@@ -15,6 +17,7 @@ class TrainableHashTableVariable(object):
         self._dtype = dtypes.as_dtype('float32')
         self._engine = engine
         self._init_values = init_values
+        self._dims = dims
 
         with ops.name_scope(name) as name:
             shared_name = ops.name_from_scope_name(name)
@@ -183,3 +186,10 @@ def embedding_lookup_sparse(
             assert False, "Unrecognized combiner"
 
         return embeddings
+
+
+def __trainable_hash_table_tensor_convert(value, dtype=None, name=None, as_ref=False):
+    return value.handle
+
+
+tensor_conversion_registry.register_tensor_conversion_function(TrainableHashTableVariable, __trainable_hash_table_tensor_convert)

@@ -26,6 +26,8 @@ from tensorflow.python.ops import state_ops
 from tensorflow.python.training import optimizer
 from tensorflow.python.training import training_ops
 from tensorflow.python.util.tf_export import tf_export
+from tensorflow.python.ops import trainable_hash_table_ops
+from tensorflow.python.ops import gen_trainable_hash_table_ops
 
 
 @tf_export(v1=["train.AdamOptimizer"])
@@ -208,6 +210,28 @@ class AdamOptimizer(optimizer.Optimizer):
     var_update = state_ops.assign_sub(
         var, lr * m_t / (v_sqrt + epsilon_t), use_locking=self._use_locking)
     return control_flow_ops.group(*[var_update, m_t, v_t])
+
+  def _ps_table_apply_sparse_duplicate_indices(self, grad, var, indices):
+    beta1_power, beta2_power = self._get_beta_accumulators()
+    beta1_power = math_ops.cast(beta1_power, var.dtype.base_dtype)
+    beta2_power = math_ops.cast(beta2_power, var.dtype.base_dtype)
+    lr_t = math_ops.cast(self._lr_t, var.dtype.base_dtype)
+    beta1_t = math_ops.cast(self._beta1_t, var.dtype.base_dtype)
+    beta2_t = math_ops.cast(self._beta2_t, var.dtype.base_dtype)
+    epsilon_t = math_ops.cast(self._epsilon_t, var.dtype.base_dtype)
+    lr = (lr_t * math_ops.sqrt(1 - beta2_power) / (1 - beta1_power))
+    # m_t = beta1 * m + (1 - beta1) * g_t
+    m = self.get_slot(var, 'm')
+    m_indixed = trainable_hash_table_ops.embedding_lookup(m, indices)
+    m_t = m_indixed * beta1_t + grad * (1 - beta1_t)
+
+    v = self.get_slot(var, 'v')
+    v_indixed = trainable_hash_table_ops.embedding_lookup(v, indices)
+    v_t = v_indixed * beta2_t + (grad * grad) * (1 - beta2_t)
+    v_sqrt = math_ops.sqrt(v_t)
+    var_delta = lr * m_t / (v_sqrt + epsilon_t)
+    updated_var = gen_trainable_hash_table_ops.scatter_add_embedding_local_ps_op(var.handle, indices, -var_delta)
+    return control_flow_ops.group(*[updated_var, m_t, v_t])
 
   def _apply_sparse(self, grad, var):
     return self._apply_sparse_shared(
