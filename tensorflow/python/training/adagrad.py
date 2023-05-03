@@ -23,9 +23,12 @@ from tensorflow.python.ops import array_ops
 from tensorflow.python.ops import gen_array_ops
 from tensorflow.python.ops import init_ops
 from tensorflow.python.ops import math_ops
+from tensorflow.python.ops import control_flow_ops
 from tensorflow.python.training import optimizer
 from tensorflow.python.training import training_ops
 from tensorflow.python.util.tf_export import tf_export
+from tensorflow.python.ops import trainable_hash_table_ops
+from tensorflow.python.ops import gen_trainable_hash_table_ops
 
 
 @tf_export(v1=["train.AdagradOptimizer"])
@@ -84,8 +87,14 @@ class AdagradOptimizer(optimizer.Optimizer):
     def init():
       # Use a Tensor instead of initializer if variable does not have
       # static shape.
-      init_constant = gen_array_ops.fill(array_ops.shape(v),
-                                         self._initial_accumulator_value)
+      if isinstance(v, trainable_hash_table_ops.TrainableHashTableVariable):
+        slot_init_shape = array_ops.shape(v.init_values)
+        slot_init_shape = slot_init_shape[1:]
+        slot_init_val = array_ops.fill(slot_init_shape, self._initial_accumulator_value)
+        init_constant = array_ops.expand_dims(slot_init_val, 0)
+      else:
+        init_constant = gen_array_ops.fill(array_ops.shape(v),
+                                           self._initial_accumulator_value)
       return math_ops.cast(init_constant, dtype)
     return init
 
@@ -131,3 +140,12 @@ class AdagradOptimizer(optimizer.Optimizer):
         grad,
         indices,
         use_locking=self._use_locking)
+
+  def _ps_table_apply_sparse_duplicate_indices(self, grad, var, indices):
+    acc = self.get_slot(var, "accumulator")
+    acc_indixed = trainable_hash_table_ops.embedding_lookup(acc, indices)
+    acc_indixed = acc_indixed + grad*grad
+    acc_indixed = gen_trainable_hash_table_ops.scatter_assign_embedding_local_ps_op(acc.handle, indices, acc_indixed)
+    delta = grad * self._learning_rate * math_ops.rsqrt(acc_indixed)
+    updated_var = gen_trainable_hash_table_ops.scatter_sub_embedding_local_ps_op(var.handle, indices, delta)
+    return control_flow_ops.group(*[updated_var, acc_indixed])

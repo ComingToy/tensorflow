@@ -77,6 +77,7 @@ def _create_slot_var(primary,
   if isinstance(primary, trainable_hash_table_ops.TrainableHashTableVariable):
     scope_name = variable_scope.get_variable_scope().name
     full_name = scope_name + '/' + scope if scope_name else scope
+    val = val() if callable(val) else val
     with ops.name_scope(None, skip_on_eager=False):
         slot = trainable_hash_table_ops.TrainableHashTableVariable(val, name=full_name, dims=primary.dims, engine=primary.engine, trainable=False, training=True)
   else:

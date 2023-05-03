@@ -224,13 +224,16 @@ class AdamOptimizer(optimizer.Optimizer):
     m = self.get_slot(var, 'm')
     m_indixed = trainable_hash_table_ops.embedding_lookup(m, indices)
     m_t = m_indixed * beta1_t + grad * (1 - beta1_t)
+    m_t = gen_trainable_hash_table_ops.scatter_assign_embedding_local_ps_op(m.handle, indices, m_t)
 
     v = self.get_slot(var, 'v')
     v_indixed = trainable_hash_table_ops.embedding_lookup(v, indices)
     v_t = v_indixed * beta2_t + (grad * grad) * (1 - beta2_t)
+    v_t = gen_trainable_hash_table_ops.scatter_assign_embedding_local_ps_op(v.handle, indices, v_t)
+
     v_sqrt = math_ops.sqrt(v_t)
     var_delta = lr * m_t / (v_sqrt + epsilon_t)
-    updated_var = gen_trainable_hash_table_ops.scatter_add_embedding_local_ps_op(var.handle, indices, -var_delta)
+    updated_var = gen_trainable_hash_table_ops.scatter_sub_embedding_local_ps_op(var.handle, indices, var_delta)
     return control_flow_ops.group(*[updated_var, m_t, v_t])
 
   def _apply_sparse(self, grad, var):
